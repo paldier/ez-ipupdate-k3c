@@ -46,6 +46,10 @@
 #define EZIP_DEFAULT_PORT "80"
 #define EZIP_REQUEST "/members/update/"
 
+#define NOIP_DEFAULT_SERVER "dynupdate.no-ip.com"
+#define NOIP_DEFAULT_PORT "80"
+#define NOIP_REQUEST "/nic/update"
+
 #define PGPOW_DEFAULT_SERVER "www.penguinpowered.com"
 #define PGPOW_DEFAULT_PORT "2345"
 #define PGPOW_REQUEST "update"
@@ -61,6 +65,11 @@
 #define DYNDNS_REQUEST "/nic/update"
 #define DYNDNS_STAT_REQUEST "/nic/update"
 #define DYNDNS_MAX_INTERVAL (25*24*3600)
+
+#define QDNS_DEFAULT_SERVER "members.3322.org"
+#define QDNS_DEFAULT_PORT "80"
+#define QDNS_REQUEST "/dyndns/update"
+#define QDNS_STAT_REQUEST "/dyndns/update"
 
 #define ODS_DEFAULT_SERVER "update.ods.org"
 #define ODS_DEFAULT_PORT "7070"
@@ -95,13 +104,13 @@
 #define HN_DEFAULT_PORT "80"
 #define HN_REQUEST "/vanity/update"
 
-#define ZONEEDIT_DEFAULT_SERVER "www.zoneedit.com"
+#define ZONEEDIT_DEFAULT_SERVER "dynamic.zoneedit.com"
 #define ZONEEDIT_DEFAULT_PORT "80"
 #define ZONEEDIT_REQUEST "/auth/dynamic.html"
 
-#define HEIPV6TB_DEFAULT_SERVER "ipv6tb.he.net"
+#define HEIPV6TB_DEFAULT_SERVER "ipv4.tunnelbroker.net"
 #define HEIPV6TB_DEFAULT_PORT "80"
-#define HEIPV6TB_REQUEST "/index.cgi"
+#define HEIPV6TB_REQUEST "/ipv4_end.php"
 
 #define DEFAULT_TIMEOUT 120
 #define DEFAULT_UPDATE_PERIOD 120
@@ -216,6 +225,8 @@
 #define MAX_WAITRESPONSE_WAIT (24*3600)
 #define MAX_MESSAGE_LEN 256
 #define ARGLENGTH 32
+#define BLOCK_FILE "/var/run/ez-ipupdate.block"
+#define PID_FILE "/var/run/ez-ipupdate.pid"
 
 /**************************************************/
 
@@ -285,6 +296,10 @@ int EZIP_update_entry(void);
 int EZIP_check_info(void);
 static char *EZIP_fields_used[] = { "server", "user", "address", "wildcard", "mx", "url", "host", NULL };
 
+int NOIP_update_entry(void);
+int NOIP_check_info(void);
+static char *NOIP_fields_used[] = { "server", "user", "host", "address", "wildcard", "mx", "offline", NULL };
+
 int PGPOW_update_entry(void);
 int PGPOW_check_info(void);
 static char *PGPOW_fields_used[] = { "server", "host", NULL };
@@ -339,7 +354,7 @@ static char *ZONEEDIT_fields_used[] = { "server", "user", "address", "mx", "host
 
 int HEIPV6TB_update_entry(void);
 int HEIPV6TB_check_info(void);
-static char *HEIPV6TB_fields_used[] = { "server", "user", NULL };
+static char *HEIPV6TB_fields_used[] = { "server", "user", "address", "host", NULL };
 
 struct service_t services[] = {
   { "NULL",
@@ -361,6 +376,16 @@ struct service_t services[] = {
     EZIP_DEFAULT_SERVER,
     EZIP_DEFAULT_PORT,
     EZIP_REQUEST
+  },
+  { "no-ip",
+    { "noip", "no-ip", 0, },
+    NULL,
+    NOIP_update_entry,
+    NOIP_check_info,
+    NOIP_fields_used,
+    NOIP_DEFAULT_SERVER,
+    NOIP_DEFAULT_PORT,
+    NOIP_REQUEST
   },
   { "justlinux v1.0 (penguinpowered)",
     { "pgpow", "penguinpowered", 0, },
@@ -665,7 +690,7 @@ void print_usage( void )
 
 void print_version( void )
 {
-  fprintf(stdout, "%s: - %s - $Id: ez-ipupdate.c,v 1.48 2001/07/17 00:49:41 amackay Exp $\n", program_name, VERSION);
+  fprintf(stdout, "%s: - %s - $Id: ez-ipupdate.c,v 1.1.1.1 2008/07/21 09:17:41 james26_jang Exp $\n", program_name, VERSION);
 }
 
 void print_credits( void )
@@ -1821,6 +1846,160 @@ int EZIP_update_entry(void)
         sscanf(buf, " HTTP/1.%*c %*3d %255[^\r\n]", auth);
         show_message("unknown return code: %d\n", ret);
         fprintf(stderr, "server response: %s\n", auth);
+      }
+      return(UPDATERES_ERROR);
+      break;
+  }
+
+  return(UPDATERES_OK);
+}
+
+int NOIP_check_info(void)
+{
+  char buf[BUFSIZ+1];
+
+  if ((host == NULL) || (*host == '\0'))
+  {
+    if (options & OPT_DAEMON)
+    {
+      return(-1);
+    }
+    if(host) { free(host); }
+    get_input("host", buf, sizeof(buf));
+    host = strdup(buf);
+  }
+
+  if (interface == NULL && address == NULL)
+  {
+    if(options & OPT_DAEMON)
+    {
+      show_message("you must provide either an interface or an address\n");
+      return(-1);
+    }
+    if(interface) { free(interface); }
+    get_input("interface", buf, sizeof(buf));
+    option_handler(CMD_interface, buf);
+  }
+
+  warn_fields(service->fields_used);
+
+  return 0;
+}
+
+int NOIP_update_entry(void)
+{
+  char *buf = update_entry_buf;
+  char *bp;
+  int bytes;
+  int btot;
+  int ret;
+
+  buf[BUFFER_SIZE] = '\0';
+
+  if(do_connect((int*)&client_sockfd, server, port) != 0)
+  {
+    if(!(options & OPT_QUIET))
+    {
+      show_message("error connecting to %s:%s\n", server, port);
+    }
+    return(UPDATERES_ERROR);
+  }
+
+  snprintf(buf, BUFFER_SIZE, "GET %s?", request);
+  output(buf);
+
+  snprintf(buf, BUFFER_SIZE, "%s=%s", "hostname", host);
+  output(buf);
+
+  if (address)
+  {
+    snprintf(buf, BUFFER_SIZE, "&%s=%s", "myip", address);
+    output(buf);
+  }
+
+  if (options & OPT_OFFLINE)
+  {
+    snprintf(buf, BUFFER_SIZE, "&%s=%s", "offline", "yes");
+    output(buf);
+  }
+  snprintf(buf, BUFFER_SIZE, "&%s=%s", "wildcard", wildcard ? "yes" : "no");
+  output(buf);
+
+  snprintf(buf, BUFFER_SIZE, "&%s=%s", "mx", mx);
+  output(buf);
+
+  //snprintf(buf, BUFFER_SIZE, "&%s=%s", "url", url);
+  //output(buf);
+
+  snprintf(buf, BUFFER_SIZE, " HTTP/1.0\015\012");
+  output(buf);
+
+  snprintf(buf, BUFFER_SIZE, "Host: %s\015\012", server);
+  output(buf);
+
+  snprintf(buf, BUFFER_SIZE, "Authorization: Basic %s\015\012", auth);
+  output(buf);
+
+  snprintf(buf, BUFFER_SIZE, "User-Agent: %s-%s %s [%s] (%s)\015\012", 
+      "ez-update", VERSION, OS, (options & OPT_DAEMON) ? "daemon" : "", "by Angus Mackay");
+  output(buf);
+
+  snprintf(buf, BUFFER_SIZE, "\015\012");
+  output(buf);
+
+  bp = buf;
+  bytes = 0;
+  btot = 0;
+  while ((bytes=read_input(bp, BUFFER_SIZE-btot)) > 0)
+  {
+    bp += bytes;
+    btot += bytes;
+    dprintf((stderr, "btot: %d\n", btot));
+  }
+
+  close(client_sockfd);
+  buf[btot] = '\0';
+
+  dprintf((stderr, "server output: %s\n", buf));
+
+  if(sscanf(buf, " HTTP/1.%*c %3d", &ret) != 1)
+  {
+    ret = -1;
+  }
+
+  switch(ret)
+  {
+    case -1:
+      if(!(options & OPT_QUIET))
+      {
+        show_message("strange server response, are you connecting to the right server?\n");
+      }
+      return(UPDATERES_ERROR);
+      break;
+
+    case 200:
+      if(!(options & OPT_QUIET))
+      {
+        show_message("request successful\n");
+      }
+      break;
+
+    case 401:
+      if(!(options & OPT_QUIET))
+      {
+        show_message("authentication failure\n");
+      }
+      return(UPDATERES_AUTHFAIL);
+      break;
+
+    default:
+      if(!(options & OPT_QUIET))
+      {
+        // reuse the auth buffer
+        *auth = '\0';
+        sscanf(buf, " HTTP/1.%*c %*3d %255[^\r\n]", auth);
+        show_message("unknown return code: %d\n", ret);
+        show_message("server response: %s\n", auth);
       }
       return(UPDATERES_ERROR);
       break;
@@ -4153,6 +4332,13 @@ int HEIPV6TB_check_info(void)
     chomp(buf);
     option_handler(CMD_interface, buf);
   }
+
+  if((host == NULL) || (*host == '\0'))
+  {
+    fprintf(stderr, "you must provide global tunnel id in 'host' param\n");
+    return(-1);
+  }
+
   warn_fields(service->fields_used);
 
   return 0;
@@ -4160,8 +4346,9 @@ int HEIPV6TB_check_info(void)
 
 int HEIPV6TB_update_entry(void)
 {
-  char buf[BUFFER_SIZE+1];
-  char *bp = buf;
+  unsigned char digestbuf[MD5_DIGEST_BYTES];
+  char *buf = update_entry_buf;
+  char *bp;
   int bytes;
   int btot;
   int ret;
@@ -4177,13 +4364,22 @@ int HEIPV6TB_update_entry(void)
     return(UPDATERES_ERROR);
   }
 
-  snprintf(buf, BUFFER_SIZE, "GET %s?menu=%s&", request, "edit_tunnel_address");
+  // use the auth buffer
+  md5_buffer(password, strlen(password), digestbuf);
+  for(bytes = 0, bp = auth; bytes < MD5_DIGEST_BYTES; bytes++)
+  {
+    bp += sprintf(bp, "%02x", digestbuf[bytes]);
+  }
+
+  snprintf(buf, BUFFER_SIZE, "GET %s?", request);
   output(buf);
-  snprintf(buf, BUFFER_SIZE, "aname=%s&", user_name);
+  snprintf(buf, BUFFER_SIZE, "ip=%s&", (address && *address) ? address : "AUTO");
   output(buf);
-  snprintf(buf, BUFFER_SIZE, "auth=%s&", password);
+  snprintf(buf, BUFFER_SIZE, "apikey=%s&", user_name);
   output(buf);
-  snprintf(buf, BUFFER_SIZE, "ipv4b=%s", address);
+  snprintf(buf, BUFFER_SIZE, "pass=%s&", auth);
+  output(buf);
+  snprintf(buf, BUFFER_SIZE, "tid=%s&", host);
   output(buf);
   snprintf(buf, BUFFER_SIZE, " HTTP/1.0\015\012");
   output(buf);
@@ -4215,8 +4411,6 @@ int HEIPV6TB_update_entry(void)
 
   switch(ret)
   {
-    char *p;
-
     case -1:
       if(!(options & OPT_QUIET))
       {
@@ -4227,7 +4421,29 @@ int HEIPV6TB_update_entry(void)
     case 200:
       if(!(options & OPT_QUIET))
       {
-        printf("request successful\n");
+        // reuse the auth buffer
+        *auth = '\0';
+        if ((bp = strstr(buf, "+OK:")) != NULL)
+          sscanf(bp, "+OK%255[^\r\n]", auth);
+        else if ((bp = strstr(buf, "-ERROR:")) != NULL)
+          sscanf(bp, "-ERROR%255[^\r\n]", auth);
+      }
+      if(strstr(buf, "+OK:") != NULL ||
+         strstr(buf, "endpoint updated") != NULL ||
+         strstr(buf, "tunnel is already") != NULL)
+      {
+        if(!(options & OPT_QUIET))
+        {
+          fprintf(stderr, "request successful%s\n", auth);
+        }
+      }
+      else
+      {
+        if(!(options & OPT_QUIET))
+        {
+          fprintf(stderr, "bad request%s\n", auth);
+        }
+        return(UPDATERES_ERROR);
       }
       break;
     default:
@@ -4236,7 +4452,7 @@ int HEIPV6TB_update_entry(void)
         // reuse the auth buffer
         *auth = '\0';
         sscanf(buf, " HTTP/1.%*c %*3d %255[^\r\n]", auth);
-        show_message("unknown return code: %d\n", ret);
+        fprintf(stderr, "unknown return code: %d\n", ret);
         fprintf(stderr, "server response: %s\n", auth);
       }
       return(UPDATERES_ERROR);

@@ -4332,13 +4332,6 @@ int HEIPV6TB_check_info(void)
     chomp(buf);
     option_handler(CMD_interface, buf);
   }
-
-  if((host == NULL) || (*host == '\0'))
-  {
-    fprintf(stderr, "you must provide global tunnel id in 'host' param\n");
-    return(-1);
-  }
-
   warn_fields(service->fields_used);
 
   return 0;
@@ -5113,4 +5106,5 @@ int main(int argc, char **argv)
   dprintf((stderr, "done\n"));
   return(retval);
 }
+
 
