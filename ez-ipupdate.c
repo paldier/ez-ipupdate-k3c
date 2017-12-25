@@ -282,6 +282,8 @@ time_t last_update = 0;
 char *notify_email = NULL;
 char *pid_file = NULL;
 char *partner = NULL;
+char update_entry_buf[BUFFER_SIZE+1];
+char update_entry_putbuf[BUFFER_SIZE+1];
 
 static volatile int client_sockfd;
 static volatile int last_sig = 0;
