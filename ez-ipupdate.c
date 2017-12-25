@@ -439,6 +439,26 @@ struct service_t services[] = {
     DYNDNS_DEFAULT_PORT,
     DYNDNS_REQUEST
   },
+  { "qdns",
+    {  "qdns dynamic" },
+    DYNDNS_init,
+    DYNDNS_update_entry,
+    DYNDNS_check_info,
+    DYNDNS_fields_used,
+    QDNS_DEFAULT_SERVER,
+    QDNS_DEFAULT_PORT,
+    QDNS_REQUEST
+  },
+  { "qdns-static",
+    {"qdns-static"},
+    DYNDNS_init,
+    DYNDNS_update_entry,
+    DYNDNS_check_info,
+    DYNDNS_STAT_fields_used,
+    QDNS_DEFAULT_SERVER,
+    QDNS_DEFAULT_PORT,
+    QDNS_STAT_REQUEST
+  },
   { "ods",
     { "ods", 0, 0, },
     NULL,
@@ -5114,5 +5134,4 @@ int main(int argc, char **argv)
   dprintf((stderr, "done\n"));
   return(retval);
 }
-
 
