@@ -1867,8 +1867,11 @@ int NOIP_check_info(void)
       return(-1);
     }
     if(host) { free(host); }
-    get_input("host", buf, sizeof(buf));
+    printf("host: ");
+    *buf = '\0';
+    fgets(buf, BUFSIZ, stdin);
     host = strdup(buf);
+    chomp(host);
   }
 
   if (interface == NULL && address == NULL)
@@ -1879,7 +1882,10 @@ int NOIP_check_info(void)
       return(-1);
     }
     if(interface) { free(interface); }
-    get_input("interface", buf, sizeof(buf));
+    printf("interface: ");
+    *buf = '\0';
+    fgets(buf, BUFSIZ, stdin);
+    chomp(buf);
     option_handler(CMD_interface, buf);
   }
 
