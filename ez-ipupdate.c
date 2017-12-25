@@ -1991,7 +1991,7 @@ int NOIP_update_entry(void)
       {
         show_message("authentication failure\n");
       }
-      return(UPDATERES_AUTHFAIL);
+      return(UPDATERES_SHUTDOWN);
       break;
 
     default:
